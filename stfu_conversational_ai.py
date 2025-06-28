@@ -52,10 +52,24 @@ class STFUConversationalAI:
         print("🛑 Press Ctrl+C to stop\n")
         
         try:
-            # Create a custom audio interface that mutes output
-            audio_interface = SilentAudioInterface()
+            # Test microphone first
+            print("🎤 Testing microphone access...")
+            
+            # Option to test with default audio interface first
+            use_default_audio = False  # Set to True to test with default audio
+            
+            if use_default_audio:
+                print("🔧 Using DEFAULT audio interface for testing...")
+                audio_interface = DefaultAudioInterface()
+            else:
+                print("🔧 Using SILENT audio interface...")
+                audio_interface = SilentAudioInterface(self.client)
             
             # Initialize the conversation
+            print("🔧 Initializing ElevenLabs conversation...")
+            print(f"🔧 Using Agent ID: {self.agent_id}")
+            print("🔧 Registering callbacks...")
+            
             self.conversation = Conversation(
                 # API client and agent ID
                 self.client,
@@ -64,18 +78,8 @@ class STFUConversationalAI:
                 # Require auth when API key is set
                 requires_auth=bool(self.api_key),
                 
-                # Use the silent audio interface (no speech output)
+                # Use the audio interface
                 audio_interface=audio_interface,
-                
-                # Capture user transcripts
-                callback_user_transcript=self._log_user_speech,
-                
-                # Process LLM responses (instead of suppressing them)
-                callback_agent_response=self._log_agent_analysis,
-                callback_agent_response_correction=self._log_agent_correction,
-                
-                # Optional: uncomment to see latency measurements
-                # callback_latency_measurement=lambda latency: print(f"⚡ Latency: {latency}ms"),
             )
             
             self.is_listening = True
@@ -85,6 +89,8 @@ class STFUConversationalAI:
             
             # Start the conversation session
             print("🔄 Starting Conversational AI session...")
+            print("🎤 MICROPHONE TEST: Try saying 'Hello, can you hear me?'")
+            
             self.conversation.start_session()
             
             # Wait for the conversation to end
@@ -95,6 +101,13 @@ class STFUConversationalAI:
             print("\n🛑 Stopping speech monitoring...")
         except Exception as e:
             print(f"❌ Error starting Conversational AI: {e}")
+            print("🔧 Common issues:")
+            print("   - Invalid Agent ID")
+            print("   - Invalid API key")
+            print("   - Microphone permissions")
+            print("   - Network connectivity")
+            import traceback
+            traceback.print_exc()
         finally:
             self._cleanup()
             self._save_log()
@@ -105,48 +118,7 @@ class STFUConversationalAI:
         self.is_listening = False
         if self.conversation:
             self.conversation.end_session()
-    
-    def _log_user_speech(self, transcript):
-        """Log user speech transcripts (callback for user speech)"""
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        
-        # Add to conversation log
-        self.conversation_log.append({
-            "timestamp": timestamp,
-            "type": "user_speech",
-            "text": transcript
-        })
-        
-        # Display the transcription
-        print(f"📝 [{timestamp}] You said: \"{transcript}\"")
-    
-    def _log_agent_analysis(self, response):
-        """Log LLM analysis responses (callback for agent responses)"""
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        
-        # Add to conversation log
-        self.conversation_log.append({
-            "timestamp": timestamp,
-            "type": "llm_analysis",
-            "text": response
-        })
-        
-        # Display the LLM analysis
-        print(f"🧠 [{timestamp}] AI Analysis: \"{response}\"")
-    
-    def _log_agent_correction(self, original, corrected):
-        """Log agent response corrections"""
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        
-        # Add correction to conversation log
-        self.conversation_log.append({
-            "timestamp": timestamp,
-            "type": "llm_correction",
-            "text": f"Corrected: '{original}' → '{corrected}'"
-        })
-        
-        # Display the correction
-        print(f"✏️ [{timestamp}] AI Correction: '{original}' → '{corrected}'")
+
     
     def _cleanup(self):
         """Cleanup resources"""
@@ -191,34 +163,69 @@ class STFUConversationalAI:
 
 
 class SilentAudioInterface(DefaultAudioInterface):
-    """Custom audio interface that mutes agent speech output but keeps processing"""
+    """Custom audio interface that mutes agent speech output but converts it to text"""
     
-    def __init__(self):
+    def __init__(self, elevenlabs_client: ElevenLabs):
         super().__init__()
-        print("🔇 Initialized silent audio interface - agent voice is muted, text analysis enabled")
+        self.elevenlabs_client = elevenlabs_client
+        print("🔇 Initialized silent audio interface - converting agent speech to text")
     
     def output(self, audio):
-        """Override output to suppress agent speech"""
-        # Don't play the agent's audio response
-        # This effectively mutes the AI assistant while keeping text analysis
+        """Convert agent response audio to text instead of playing it"""
+        if audio and len(audio) > 0:
+            try:
+                from io import BytesIO
+                import time
+                import wave
+                
+                # Convert raw PCM audio to WAV format
+                wav_buffer = BytesIO()
+                with wave.open(wav_buffer, 'wb') as wav_file:
+                    wav_file.setnchannels(1)  # Mono
+                    wav_file.setsampwidth(2)  # 16-bit
+                    wav_file.setframerate(16000)  # 16kHz
+                    wav_file.writeframes(audio)
+                
+                wav_buffer.seek(0)
+                
+                # Convert agent response audio to text
+                transcription = self.elevenlabs_client.speech_to_text.convert(
+                    file=wav_buffer,
+                    model_id="scribe_v1",
+                    language_code="eng"
+                )
+                
+                # Display the AI analysis as text
+                if transcription and transcription.text:
+                    timestamp = time.strftime("%H:%M:%S")
+                    print(f"🧠 [{timestamp}] AI Analysis: {transcription.text}")
+                
+            except Exception as e:
+                print(f"⚠️ Speech to text conversion error: {e}")
+        
+        # Don't actually play the audio
         pass
     
-    def interrupt(self):
-        """Override interrupt handling"""
-        # Handle interruptions silently
-        pass
 
 
 def main():
     """Main function"""
     print("🔧 Setting up ElevenLabs Conversational AI for speech-to-text + LLM analysis...")
-    print("💡 Make sure you have:")
+    
+    print("\n💡 Make sure you have:")
     print("   1. ELEVENLABS_API_KEY in your .env file")
     print("   2. ELEVENLABS_AGENT_ID in your .env file (create an agent first)")
     print("   3. Configure your agent with a good analysis prompt")
+    print("   4. Microphone permissions granted")
     print()
     print("💭 Tip: Set your agent's prompt to something like:")
     print("   'Analyze and summarize what the user says. Provide insights, themes, or key points.'")
+    print()
+    print("🎤 IMPORTANT: Make sure:")
+    print("   - Your microphone is working (test in another app)")
+    print("   - No other app is using the microphone")
+    print("   - Python/Terminal has microphone permissions")
+    print("   - You're not muted in system settings")
     print()
     
     assistant = STFUConversationalAI()

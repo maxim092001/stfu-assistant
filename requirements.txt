@@ -1,0 +1,6 @@
+# ElevenLabs Speech-to-Text - Main implementation
+elevenlabs[pyaudio]==2.5.0
+python-dotenv==1.0.1
+
+# Additional dependencies for Conversational AI implementation
+# (The elevenlabs package includes conversational AI features)

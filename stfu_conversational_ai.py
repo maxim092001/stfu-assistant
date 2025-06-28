@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 STFU Assistant - Speech to Text using ElevenLabs Conversational AI
-This implementation uses Conversational AI but mutes the agent's voice response,
-effectively using it as a real-time speech-to-text service.
+This implementation uses Conversational AI to capture speech-to-text AND
+logs the LLM's analysis of the speech without voice output.
 """
 
 import os
@@ -16,7 +16,7 @@ from elevenlabs.conversational_ai.default_audio_interface import DefaultAudioInt
 load_dotenv()
 
 class STFUConversationalAI:
-    """Speech to Text using ElevenLabs Conversational AI (silent agent)"""
+    """Speech to Text + LLM Analysis using ElevenLabs Conversational AI (silent voice)"""
     
     def __init__(self):
         self.api_key = os.getenv("ELEVENLABS_API_KEY")
@@ -33,22 +33,22 @@ class STFUConversationalAI:
         
         # Initialize ElevenLabs client
         self.client = ElevenLabs(api_key=self.api_key)
-        
+
         # Conversation log
         self.conversation_log = []
         self.conversation = None
         self.is_listening = False
         
-        print("🛡️ STFU Assistant - Conversational AI Speech-to-Text")
-        print("Using ElevenLabs Conversational AI for real-time transcription")
-        print("🔇 Agent voice output is muted - only capturing your speech")
+        print("🛡️ STFU Assistant - Conversational AI Speech-to-Text + LLM Analysis")
+        print("Using ElevenLabs Conversational AI for real-time transcription and analysis")
+        print("🔇 Agent voice output is muted - capturing speech and LLM analysis as text")
     
     def start_monitoring(self):
-        """Start real-time speech monitoring using Conversational AI"""
-        print("\n🤖 Hello! I am ready to listen and log everything you say.")
+        """Start real-time speech monitoring with LLM analysis"""
+        print("\n🤖 Hello! I am ready to listen, transcribe, and analyze everything you say.")
         print("🎤 Starting Conversational AI speech monitoring...")
-        print("🗣️  Speak naturally - I'll capture your speech in real-time")
-        print("🔇 The AI agent won't speak back - this is speech-to-text only")
+        print("🗣️  Speak naturally - I'll capture your speech and provide AI analysis")
+        print("🔇 The AI agent won't speak back - text analysis only")
         print("🛑 Press Ctrl+C to stop\n")
         
         try:
@@ -70,9 +70,9 @@ class STFUConversationalAI:
                 # Capture user transcripts
                 callback_user_transcript=self._log_user_speech,
                 
-                # Suppress agent responses (we only want transcription)
-                callback_agent_response=self._suppress_agent_response,
-                callback_agent_response_correction=self._suppress_agent_correction,
+                # Process LLM responses (instead of suppressing them)
+                callback_agent_response=self._log_agent_analysis,
+                callback_agent_response_correction=self._log_agent_correction,
                 
                 # Optional: uncomment to see latency measurements
                 # callback_latency_measurement=lambda latency: print(f"⚡ Latency: {latency}ms"),
@@ -113,22 +113,40 @@ class STFUConversationalAI:
         # Add to conversation log
         self.conversation_log.append({
             "timestamp": timestamp,
+            "type": "user_speech",
             "text": transcript
         })
         
         # Display the transcription
         print(f"📝 [{timestamp}] You said: \"{transcript}\"")
     
-    def _suppress_agent_response(self, response):
-        """Suppress agent responses - we only want speech-to-text"""
-        # Don't print or play agent responses
-        # The agent processes the speech but we ignore its output
-        pass
+    def _log_agent_analysis(self, response):
+        """Log LLM analysis responses (callback for agent responses)"""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        
+        # Add to conversation log
+        self.conversation_log.append({
+            "timestamp": timestamp,
+            "type": "llm_analysis",
+            "text": response
+        })
+        
+        # Display the LLM analysis
+        print(f"🧠 [{timestamp}] AI Analysis: \"{response}\"")
     
-    def _suppress_agent_correction(self, original, corrected):
-        """Suppress agent response corrections"""
-        # Don't print or play agent corrections
-        pass
+    def _log_agent_correction(self, original, corrected):
+        """Log agent response corrections"""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        
+        # Add correction to conversation log
+        self.conversation_log.append({
+            "timestamp": timestamp,
+            "type": "llm_correction",
+            "text": f"Corrected: '{original}' → '{corrected}'"
+        })
+        
+        # Display the correction
+        print(f"✏️ [{timestamp}] AI Correction: '{original}' → '{corrected}'")
     
     def _cleanup(self):
         """Cleanup resources"""
@@ -139,7 +157,7 @@ class STFUConversationalAI:
                 pass
     
     def _save_log(self):
-        """Save conversation log to file"""
+        """Save conversation log to file with both speech and analysis"""
         if not self.conversation_log:
             print("No speech was detected during this session.")
             return
@@ -148,27 +166,41 @@ class STFUConversationalAI:
         log_filename = f"speech_log_conversational_{timestamp}.txt"
         
         with open(log_filename, 'w') as f:
-            f.write("STFU Assistant - Conversational AI Speech Log\n")
-            f.write("=" * 50 + "\n\n")
+            f.write("STFU Assistant - Conversational AI Speech + LLM Analysis Log\n")
+            f.write("=" * 60 + "\n\n")
             
             for entry in self.conversation_log:
-                f.write(f"[{entry['timestamp']}] {entry['text']}\n")
+                entry_type = entry.get('type', 'unknown')
+                if entry_type == 'user_speech':
+                    f.write(f"[{entry['timestamp']}] USER: {entry['text']}\n")
+                elif entry_type == 'llm_analysis':
+                    f.write(f"[{entry['timestamp']}] AI: {entry['text']}\n")
+                elif entry_type == 'llm_correction':
+                    f.write(f"[{entry['timestamp']}] CORRECTION: {entry['text']}\n")
+                else:
+                    f.write(f"[{entry['timestamp']}] {entry['text']}\n")
+                f.write("\n")  # Add spacing between entries
         
-        print(f"\n📁 Speech log saved to: {log_filename}")
-        print(f"📊 Total phrases captured: {len(self.conversation_log)}")
+        # Count different types of entries
+        user_entries = len([e for e in self.conversation_log if e.get('type') == 'user_speech'])
+        ai_entries = len([e for e in self.conversation_log if e.get('type') == 'llm_analysis'])
+        
+        print(f"\n📁 Speech + Analysis log saved to: {log_filename}")
+        print(f"📊 Total user phrases: {user_entries}")
+        print(f"🧠 Total AI analyses: {ai_entries}")
 
 
 class SilentAudioInterface(DefaultAudioInterface):
-    """Custom audio interface that mutes agent speech output"""
+    """Custom audio interface that mutes agent speech output but keeps processing"""
     
     def __init__(self):
         super().__init__()
-        print("🔇 Initialized silent audio interface - agent voice is muted")
+        print("🔇 Initialized silent audio interface - agent voice is muted, text analysis enabled")
     
     def output(self, audio):
         """Override output to suppress agent speech"""
         # Don't play the agent's audio response
-        # This effectively mutes the AI assistant while keeping speech recognition
+        # This effectively mutes the AI assistant while keeping text analysis
         pass
     
     def interrupt(self):
@@ -179,10 +211,14 @@ class SilentAudioInterface(DefaultAudioInterface):
 
 def main():
     """Main function"""
-    print("🔧 Setting up ElevenLabs Conversational AI for speech-to-text...")
+    print("🔧 Setting up ElevenLabs Conversational AI for speech-to-text + LLM analysis...")
     print("💡 Make sure you have:")
     print("   1. ELEVENLABS_API_KEY in your .env file")
     print("   2. ELEVENLABS_AGENT_ID in your .env file (create an agent first)")
+    print("   3. Configure your agent with a good analysis prompt")
+    print()
+    print("💭 Tip: Set your agent's prompt to something like:")
+    print("   'Analyze and summarize what the user says. Provide insights, themes, or key points.'")
     print()
     
     assistant = STFUConversationalAI()

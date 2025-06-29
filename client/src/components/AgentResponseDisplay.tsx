@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Bot, Copy, ThumbsUp, ThumbsDown, AlertTriangle } from 'lucide-react'
+import { triggerTelegramNotification } from '../utils/telegram'
 
 interface AgentResponseDisplayProps {
   response: string
@@ -98,6 +99,17 @@ export default function AgentResponseDisplay({ response, isConnected }: AgentRes
         }
         return [...prev, newEntry]
       })
+
+      // Send Telegram notification for critical responses
+      if (parsed.isCritical && parsed.riskLevel !== undefined) {
+        triggerTelegramNotification({
+          text: parsed.displayText,
+          riskLevel: parsed.riskLevel,
+          timestamp: newEntry.timestamp,
+        }).catch(error => {
+          console.error('Failed to send Telegram notification:', error)
+        })
+      }
 
       // Trigger typing animation for new response
       setIsTyping(true)

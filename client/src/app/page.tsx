@@ -37,7 +37,40 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="min-h-screen bg-slate-950 text-white relative">
+      {/* Sponsor Badges */}
+      <div className="fixed top-4 right-4 z-50 flex flex-col items-end gap-2">
+        {/* Bolt.new Badge - Required for hackathon */}
+        <a 
+          href="https://bolt.new/" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="hover:scale-105 transition-all duration-200 hover:drop-shadow-lg"
+          aria-label="Built with Bolt.new"
+        >
+          <img 
+            src="/white_circle_360x360.png" 
+            alt="Built with Bolt.new" 
+            className="w-12 h-12 md:w-16 md:h-16"
+          />
+        </a>
+
+        {/* ElevenLabs Logo */}
+        <a 
+          href="https://elevenlabs.io/" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="hover:scale-105 transition-all duration-200 hover:drop-shadow-lg"
+          aria-label="Powered by ElevenLabs"
+        >
+          <img 
+            src="/elevenlabs-logo-white.svg" 
+            alt="Powered by ElevenLabs" 
+            className="h-6 md:h-8 w-auto"
+          />
+        </a>
+      </div>
+
       <div className="container mx-auto px-4 py-6 min-h-screen flex flex-col">
         {/* Header */}
         <header className="text-center mb-6">

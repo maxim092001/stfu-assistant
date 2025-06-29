@@ -33,7 +33,7 @@ export default function AgentResponseDisplay({ response, isConnected }: AgentRes
   const [isScrolledToBottom, setIsScrolledToBottom] = useState(true)
   const [typingText, setTypingText] = useState('')
   const [isTyping, setIsTyping] = useState(false)
-  const [showCriticalOnly, setShowCriticalOnly] = useState(false)
+  const [showCriticalOnly, setShowCriticalOnly] = useState(true)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -205,7 +205,7 @@ export default function AgentResponseDisplay({ response, isConnected }: AgentRes
   }
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-lg p-4 h-[calc(100vh-12rem)]">
+    <div className="bg-slate-900 border border-slate-800 rounded-lg p-4 h-[calc(100vh-16rem)]">
       {/* Header */}
       <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
         <div className="flex items-center gap-3">

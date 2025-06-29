@@ -192,41 +192,44 @@ export default function VoiceStreaming({
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Mute/Unmute Button */}
-            <div>
-              <button
-                onClick={toggleMute}
-                className={`w-14 h-14 rounded-full border-2 transition-colors ${
-                  !isListening 
-                    ? 'bg-yellow-500/20 border-yellow-500' 
-                    : 'bg-green-500/20 border-green-500'
-                }`}
-              >
-                {!isListening ? (
-                  <MicOff className="w-5 h-5 text-yellow-400 mx-auto" />
-                ) : (
-                  <Mic className="w-5 h-5 text-green-400 mx-auto" />
-                )}
-              </button>
+            {/* Mute/Unmute and End Call Buttons */}
+            <div className="flex items-center justify-center gap-6">
+              {/* Mute/Unmute Button */}
+              <div className="text-center">
+                <button
+                  onClick={toggleMute}
+                  className={`w-14 h-14 rounded-full border-2 transition-colors ${
+                    !isListening 
+                      ? 'bg-yellow-500/20 border-yellow-500' 
+                      : 'bg-green-500/20 border-green-500'
+                  }`}
+                >
+                  {!isListening ? (
+                    <MicOff className="w-5 h-5 text-yellow-400 mx-auto" />
+                  ) : (
+                    <Mic className="w-5 h-5 text-green-400 mx-auto" />
+                  )}
+                </button>
 
-              <div className="mt-2">
-                <p className="text-sm font-medium text-white">
-                  {!isListening ? 'Unmute' : 'Mute'}
-                </p>
+                <div className="mt-2">
+                  <p className="text-sm font-medium text-white">
+                    {!isListening ? 'Unmute' : 'Mute'}
+                  </p>
+                </div>
               </div>
-            </div>
 
-            {/* End Call Button */}
-            <div>
-              <button
-                onClick={endCall}
-                className="w-14 h-14 rounded-full border-2 bg-red-500/20 border-red-500 hover:bg-red-500/30 transition-colors"
-              >
-                <PhoneOff className="w-5 h-5 text-red-400 mx-auto" />
-              </button>
+              {/* End Call Button */}
+              <div className="text-center">
+                <button
+                  onClick={endCall}
+                  className="w-14 h-14 rounded-full border-2 bg-red-500/20 border-red-500 hover:bg-red-500/30 transition-colors"
+                >
+                  <PhoneOff className="w-5 h-5 text-red-400 mx-auto" />
+                </button>
 
-              <div className="mt-2">
-                <p className="text-sm font-medium text-white">End Call</p>
+                <div className="mt-2">
+                  <p className="text-sm font-medium text-white">End Call</p>
+                </div>
               </div>
             </div>
 

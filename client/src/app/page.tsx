@@ -11,6 +11,7 @@ import StatusIndicator from '@/components/StatusIndicator'
 export default function Home() {
   const [isListening, setIsListening] = useState(false)
   const [isConnected, setIsConnected] = useState(false)
+  const [isMuted, setIsMuted] = useState(false)
   const [userTranscript, setUserTranscript] = useState('')
   const [agentResponse, setAgentResponse] = useState('')
   const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected')
@@ -22,6 +23,10 @@ export default function Home() {
 
   const handleListeningChange = (listening: boolean) => {
     setIsListening(listening)
+  }
+
+  const handleMutedChange = (muted: boolean) => {
+    setIsMuted(muted)
   }
 
   const handleUserTranscript = (transcript: string) => {
@@ -75,6 +80,7 @@ export default function Home() {
             <VoiceStreaming
               onConnectionChange={handleConnectionChange}
               onListeningChange={handleListeningChange}
+              onMutedChange={handleMutedChange}
               onUserTranscript={handleUserTranscript}
               onAgentResponse={handleAgentResponse}
               onStatusChange={setConnectionStatus}
@@ -83,6 +89,7 @@ export default function Home() {
             <TranscriptDisplay
               transcript={userTranscript}
               isListening={isListening}
+              isMuted={isMuted}
             />
           </motion.div>
 

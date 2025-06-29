@@ -14,15 +14,27 @@ interface UseElevenLabsWebSocketProps {
   onStatusChange: (status: ConnectionStatus) => void
   onConnectionChange: (connected: boolean) => void
   agentId: string
-  apiKey?: string
+  isListening?: boolean
 }
 
 // Send message helper - exactly as in docs
 const sendMessage = (websocket: WebSocket | null, request: object) => {
+  // console.log('📤 sendMessage called:', {
+  //   websocketExists: !!websocket,
+  //   websocketState: websocket?.readyState,
+  //   isOpen: websocket?.readyState === WebSocket.OPEN,
+  //   messageType: (request as any).type || 'audio_chunk',
+  //   hasAudioChunk: !!(request as any).user_audio_chunk
+  // })
+  
   if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+    console.log('❌ sendMessage BLOCKED - WebSocket not open')
     return
   }
+  
+  // console.log('✅ sendMessage EXECUTING - sending to WebSocket')
   websocket.send(JSON.stringify(request))
+  // console.log('✅ sendMessage COMPLETED')
 }
 
 export function useElevenLabsWebSocket({
@@ -31,11 +43,21 @@ export function useElevenLabsWebSocket({
   onStatusChange,
   onConnectionChange,
   agentId,
-  apiKey
+  isListening = true
 }: UseElevenLabsWebSocketProps) {
   const websocketRef = useRef<WebSocket | null>(null)
   const [isConnected, setIsConnected] = useState(false)
   const [conversationId, setConversationId] = useState<string | null>(null)
+  const [isStreamingActive, setIsStreamingActive] = useState(false)
+  
+  // Use ref to track current listening state to avoid stale closure
+  const isListeningRef = useRef(isListening)
+  
+  // Update ref whenever isListening prop changes
+  useEffect(() => {
+    console.log('🔄 isListening prop changed:', { old: isListeningRef.current, new: isListening })
+    isListeningRef.current = isListening
+  }, [isListening])
   
   // Audio playback refs
   const audioContextRef = useRef<AudioContext | null>(null)
@@ -46,19 +68,51 @@ export function useElevenLabsWebSocket({
   // Use official voice-stream package as recommended by ElevenLabs
   const { startStreaming, stopStreaming } = useVoiceStream({
     onAudioChunked: (audioData) => {
-      console.log('🎙️ voice-stream audio chunk:', {
+      const currentIsListening = isListeningRef.current
+      console.log('🎙️ voice-stream audio chunk received:', {
         length: audioData.length,
         websocketConnected: isConnected,
+        isListening: currentIsListening,
         sample: audioData.substring(0, 50) + '...'
       })
       
-      // Use the exact sendMessage pattern from docs
-      sendMessage(websocketRef.current, {
-        user_audio_chunk: audioData,
+      console.log('🔍 Audio chunk decision:', {
+        isListening: currentIsListening,
+        websocketConnected: isConnected,
+        willSend: currentIsListening && isConnected
       })
-      console.log('✅ Audio chunk sent via voice-stream')
+      
+      // Only send audio chunks when listening (mute control)
+      if (currentIsListening) {
+        console.log('✅ SENDING audio chunk to WebSocket')
+        sendMessage(websocketRef.current, {
+          user_audio_chunk: audioData,
+        })
+        console.log('✅ Audio chunk sent via voice-stream')
+      } else {
+        console.log('🔇 BLOCKING audio chunk - not listening')
+      }
     },
   })
+
+  // Handle mute/unmute by actually stopping/starting the voice stream
+  useEffect(() => {
+    if (!isConnected) return
+
+    const handleMuteChange = async () => {
+      if (!isListening && isStreamingActive) {
+        console.log('🔇 Muting - stopping voice stream')
+        // await stopStreaming()
+        setIsStreamingActive(false)
+      } else if (isListening && !isStreamingActive && isConnected) {
+        console.log('🎙️ Unmuting - starting voice stream')
+        await startStreaming()
+        setIsStreamingActive(true)
+      }
+    }
+
+    handleMuteChange()
+  }, [isListening, isConnected, isStreamingActive, startStreaming, stopStreaming])
 
   // Initialize Web Audio API for playback
   const initializeAudioPlayback = useCallback(async () => {
@@ -179,9 +233,14 @@ export function useElevenLabsWebSocket({
           type: "conversation_initiation_client_data",
         })
         
-        // Start audio streaming
-        await startStreaming()
-        console.log('🎙️ voice-stream started')
+        // Start audio streaming only if listening
+        if (isListening) {
+          await startStreaming()
+          setIsStreamingActive(true)
+          console.log('🎙️ voice-stream started')
+        } else {
+          console.log('🔇 Starting muted - voice stream not started')
+        }
       }
 
       websocket.onmessage = async (event) => {
@@ -225,7 +284,7 @@ export function useElevenLabsWebSocket({
             console.log('🔊 Audio response received')
             const audioItem: AudioQueueItem = {
               audioData: data.audio_event.audio_base_64,
-              eventId: data.audio_event.event_id
+              eventId: data.audio_event.event_id.toString()
             }
             audioQueueRef.current.push(audioItem)
             processAudioQueue()
@@ -257,6 +316,7 @@ export function useElevenLabsWebSocket({
         websocketRef.current = null
         setIsConnected(false)
         setConversationId(null)
+        setIsStreamingActive(false)
         onConnectionChange(false)
         onStatusChange('disconnected')
         stopStreaming()
@@ -268,7 +328,7 @@ export function useElevenLabsWebSocket({
       onStatusChange('error')
       throw error
     }
-  }, [agentId, isConnected, onStatusChange, onConnectionChange, initializeAudioPlayback, startStreaming, onUserTranscript, onAgentResponse, processAudioQueue, stopAudio, stopStreaming])
+  }, [agentId, isConnected, onStatusChange, onConnectionChange, initializeAudioPlayback, startStreaming, onUserTranscript, onAgentResponse, processAudioQueue, stopAudio, stopStreaming, isListening])
 
   // Stop conversation - following docs pattern
   const stopConversation = useCallback(async () => {

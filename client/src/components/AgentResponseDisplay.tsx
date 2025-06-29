@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Bot, Copy, Volume2, ThumbsUp, ThumbsDown } from 'lucide-react'
+import { Bot, Copy, ThumbsUp, ThumbsDown, AlertTriangle } from 'lucide-react'
 
 interface AgentResponseDisplayProps {
   response: string
@@ -12,8 +12,19 @@ interface AgentResponseDisplayProps {
 interface ResponseEntry {
   id: string
   text: string
+  displayText: string // The actual message to display
   timestamp: Date
   rating?: 'up' | 'down' | null
+  isCritical?: boolean
+  riskLevel?: number
+}
+
+interface ParsedResponse {
+  message?: string
+  risk?: number
+  displayText: string
+  riskLevel?: number
+  isCritical: boolean
 }
 
 export default function AgentResponseDisplay({ response, isConnected }: AgentResponseDisplayProps) {
@@ -21,17 +32,63 @@ export default function AgentResponseDisplay({ response, isConnected }: AgentRes
   const [isScrolledToBottom, setIsScrolledToBottom] = useState(true)
   const [typingText, setTypingText] = useState('')
   const [isTyping, setIsTyping] = useState(false)
+  const [showCriticalOnly, setShowCriticalOnly] = useState(false)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Helper function to parse response and extract message/risk
+  const parseResponse = (responseText: string): ParsedResponse => {
+    try {
+      const parsed = JSON.parse(responseText.trim())
+      if (typeof parsed === 'object' && parsed !== null) {
+        const message = parsed.message || responseText
+        const risk = typeof parsed.risk === 'number' ? parsed.risk : undefined
+        
+        return {
+          message: parsed.message,
+          risk,
+          displayText: message,
+          riskLevel: risk,
+          isCritical: risk !== undefined && risk >= 80
+        }
+      }
+    } catch (error) {
+      // Not valid JSON, treat as plain text
+    }
+    
+    return {
+      displayText: responseText,
+      isCritical: false
+    }
+  }
+
+  // Helper function to get risk color based on value
+  const getRiskColor = (risk: number): string => {
+    if (risk >= 71) return 'text-red-400 bg-red-950/30 border-red-900/50'
+    if (risk >= 31) return 'text-yellow-400 bg-yellow-950/30 border-yellow-900/50'
+    return 'text-green-400 bg-green-950/30 border-green-900/50'
+  }
+
+  // Helper function to get risk text color only
+  const getRiskTextColor = (risk: number): string => {
+    if (risk >= 71) return 'text-red-400'
+    if (risk >= 31) return 'text-yellow-400'
+    return 'text-green-400'
+  }
 
   // Add new response to history with typing animation
   useEffect(() => {
     if (response.trim()) {
+      const parsed = parseResponse(response)
+      
       const newEntry: ResponseEntry = {
         id: `response-${Date.now()}`,
-        text: response,
+        text: response, // Keep original for copying
+        displayText: parsed.displayText,
         timestamp: new Date(),
-        rating: null
+        rating: null,
+        isCritical: parsed.isCritical,
+        riskLevel: parsed.riskLevel
       }
       
       setResponseHistory(prev => {
@@ -45,14 +102,14 @@ export default function AgentResponseDisplay({ response, isConnected }: AgentRes
       // Trigger typing animation for new response
       setIsTyping(true)
       setTypingText('')
-      typewriterEffect(response)
+      typewriterEffect(parsed.displayText)
     }
   }, [response])
 
   // Typewriter effect for responses
   const typewriterEffect = (text: string) => {
     let index = 0
-    const typeSpeed = 50 // milliseconds per character
+    const typeSpeed = 30 // milliseconds per character
 
     const type = () => {
       if (index < text.length) {
@@ -67,12 +124,17 @@ export default function AgentResponseDisplay({ response, isConnected }: AgentRes
     type()
   }
 
+  // Filter responses based on critical toggle
+  const filteredResponses = showCriticalOnly 
+    ? responseHistory.filter(entry => entry.isCritical)
+    : responseHistory
+
   // Auto-scroll to bottom when new response arrives
   useEffect(() => {
     if (scrollContainerRef.current && isScrolledToBottom) {
       scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight
     }
-  }, [responseHistory, isScrolledToBottom])
+  }, [filteredResponses, isScrolledToBottom])
 
   // Handle scroll to detect if user has scrolled up
   const handleScroll = () => {
@@ -87,7 +149,6 @@ export default function AgentResponseDisplay({ response, isConnected }: AgentRes
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text)
-      // You could add a toast notification here
     } catch (err) {
       console.error('Failed to copy:', err)
     }
@@ -113,42 +174,37 @@ export default function AgentResponseDisplay({ response, isConnected }: AgentRes
     }
   }, [])
 
+  // Minimalist Switch Component
+  const Switch = ({ checked, onChange }: { checked: boolean; onChange: (checked: boolean) => void }) => {
+    return (
+      <button
+        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+          checked ? 'bg-slate-700' : 'bg-slate-600'
+        }`}
+        onClick={() => onChange(!checked)}
+      >
+        <span
+          className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+            checked ? 'translate-x-5' : 'translate-x-1'
+          }`}
+        />
+      </button>
+    )
+  }
+
   return (
-    <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-6 h-[calc(100vh-12rem)]">
+    <div className="bg-slate-900 border border-slate-800 rounded-lg p-4 h-[calc(100vh-12rem)]">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <Bot className="w-5 h-5 text-green-400" />
-            {isConnected && (
-              <motion.div
-                animate={{ scale: [1, 1.3, 1] }}
-                transition={{ duration: 2, repeat: Infinity }}
-                className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full"
-              />
-            )}
-          </div>
-          <h3 className="text-lg font-semibold text-white">AI Assistant</h3>
-          <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-            isConnected 
-              ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
-              : 'bg-red-500/20 text-red-400 border border-red-500/30'
-          }`}>
-            {isConnected ? 'Online' : 'Offline'}
-          </div>
+      <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
+        <div className="flex items-center gap-3">
+          <Bot className="w-4 h-4 text-slate-400" />
+          <span className="text-sm font-medium text-white">Assistant</span>
+          <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-slate-500'}`} />
         </div>
         
-        {/* Voice controls */}
-        <div className="flex items-center gap-1">
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className="p-2 rounded-lg bg-slate-700/50 hover:bg-slate-600/50 text-slate-300"
-            title="Text-to-speech (Coming soon)"
-            disabled
-          >
-            <Volume2 className="w-4 h-4" />
-          </motion.button>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-slate-400">Critical</span>
+          <Switch checked={showCriticalOnly} onChange={setShowCriticalOnly} />
         </div>
       </div>
 
@@ -156,130 +212,102 @@ export default function AgentResponseDisplay({ response, isConnected }: AgentRes
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800 pr-2"
+        className="h-full overflow-y-auto"
       >
-        {responseHistory.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-slate-400">
-            <div className="text-center">
-              <Bot className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p className="text-lg font-medium">Waiting for AI response</p>
+        {filteredResponses.length === 0 ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center text-slate-500">
+              <Bot className="w-8 h-8 mx-auto mb-2 opacity-50" />
               <p className="text-sm">
-                {isConnected 
-                  ? 'Start speaking to get AI analysis' 
-                  : 'Connect to start conversation'
-                }
+                {showCriticalOnly ? 'No critical responses' : 'Waiting for response'}
               </p>
             </div>
           </div>
         ) : (
-          <div className="space-y-4">
-            <AnimatePresence>
-              {responseHistory.map((entry, index) => (
-                <motion.div
-                  key={entry.id}
-                  initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -20, scale: 0.95 }}
-                  transition={{ duration: 0.4, delay: index * 0.1 }}
-                  className="group relative"
-                >
-                  <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 relative">
-                    {/* Timestamp and AI indicator */}
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <Bot className="w-4 h-4 text-green-400" />
-                        <span className="text-xs text-green-400 font-medium">AI Assistant</span>
-                        <span className="text-xs text-slate-400">
-                          {entry.timestamp.toLocaleTimeString()}
-                        </span>
-                      </div>
-                      
-                      {/* Action buttons */}
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <motion.button
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                          onClick={() => copyToClipboard(entry.text)}
-                          className="p-1 rounded bg-slate-700/50 hover:bg-slate-600/50"
-                          title="Copy response"
-                        >
-                          <Copy className="w-3 h-3 text-slate-300" />
-                        </motion.button>
-                      </div>
-                    </div>
-                    
-                    {/* Response text */}
-                    <p className="text-white leading-relaxed mb-3">
-                      {index === responseHistory.length - 1 && isTyping ? typingText : entry.text}
-                      {index === responseHistory.length - 1 && isTyping && (
-                        <motion.span
-                          animate={{ opacity: [1, 0] }}
-                          transition={{ duration: 0.8, repeat: Infinity }}
-                          className="ml-1 text-green-400"
-                        >
-                          |
-                        </motion.span>
-                      )}
-                    </p>
-                    
-                    {/* Rating buttons */}
+          <div className="space-y-3">
+            {filteredResponses.map((entry, index) => (
+              <div key={entry.id} className="group">
+                <div className={`p-3 rounded border ${
+                  entry.isCritical 
+                    ? 'bg-red-950/30 border-red-900/50' 
+                    : 'bg-slate-800/50 border-slate-700/50'
+                }`}>
+                  {/* Header */}
+                  <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <motion.button
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        onClick={() => rateResponse(entry.id, 'up')}
-                        className={`p-1 rounded transition-colors ${
-                          entry.rating === 'up' 
-                            ? 'bg-green-500/20 text-green-400' 
-                            : 'text-slate-400 hover:text-green-400'
-                        }`}
-                        title="Helpful response"
-                      >
-                        <ThumbsUp className="w-3 h-3" />
-                      </motion.button>
-                      
-                      <motion.button
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        onClick={() => rateResponse(entry.id, 'down')}
-                        className={`p-1 rounded transition-colors ${
-                          entry.rating === 'down' 
-                            ? 'bg-red-500/20 text-red-400' 
-                            : 'text-slate-400 hover:text-red-400'
-                        }`}
-                        title="Not helpful"
-                      >
-                        <ThumbsDown className="w-3 h-3" />
-                      </motion.button>
-                      
-                      <div className="text-xs text-slate-500 ml-2">
-                        Was this helpful?
-                      </div>
+                      {entry.isCritical && (
+                        <AlertTriangle className="w-3 h-3 text-red-400" />
+                      )}
+                      <span className="text-xs text-slate-400">
+                        {entry.timestamp.toLocaleTimeString()}
+                      </span>
+                      {typeof entry.riskLevel === 'number' && (
+                        <div className={`px-2 py-0.5 rounded-full text-xs font-medium border ${getRiskColor(entry.riskLevel)}`}>
+                          Risk: {entry.riskLevel}
+                        </div>
+                      )}
                     </div>
+                    
+                    <button
+                      onClick={() => copyToClipboard(entry.text)}
+                      className="opacity-0 group-hover:opacity-100 p-1 hover:bg-slate-700 rounded transition-opacity"
+                    >
+                      <Copy className="w-3 h-3 text-slate-400" />
+                    </button>
                   </div>
-                </motion.div>
-              ))}
-            </AnimatePresence>
+                  
+                  {/* Response text */}
+                  <p className="text-sm text-white leading-relaxed mb-2">
+                    {index === filteredResponses.length - 1 && isTyping ? typingText : entry.displayText}
+                    {index === filteredResponses.length - 1 && isTyping && (
+                      <span className="ml-1 text-slate-400 animate-pulse">|</span>
+                    )}
+                  </p>
+                  
+                  {/* Rating */}
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => rateResponse(entry.id, 'up')}
+                      className={`p-1 rounded transition-colors ${
+                        entry.rating === 'up' 
+                          ? 'text-green-400' 
+                          : 'text-slate-500 hover:text-green-400'
+                      }`}
+                    >
+                      <ThumbsUp className="w-3 h-3" />
+                    </button>
+                    
+                    <button
+                      onClick={() => rateResponse(entry.id, 'down')}
+                      className={`p-1 rounded transition-colors ${
+                        entry.rating === 'down' 
+                          ? 'text-red-400' 
+                          : 'text-slate-500 hover:text-red-400'
+                      }`}
+                    >
+                      <ThumbsDown className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
 
-      {/* Scroll to bottom indicator */}
-      {!isScrolledToBottom && responseHistory.length > 0 && (
-        <motion.button
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 10 }}
+      {/* Scroll indicator */}
+      {!isScrolledToBottom && filteredResponses.length > 0 && (
+        <button
           onClick={() => {
             if (scrollContainerRef.current) {
               scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight
               setIsScrolledToBottom(true)
             }
           }}
-          className="absolute bottom-4 right-4 bg-green-500/20 hover:bg-green-500/30 border border-green-500/30 rounded-full p-2 text-green-400 transition-colors"
+          className="absolute bottom-4 right-4 w-8 h-8 bg-slate-800 hover:bg-slate-700 rounded-full flex items-center justify-center text-slate-400 text-xs transition-colors"
         >
           ↓
-        </motion.button>
+        </button>
       )}
     </div>
   )

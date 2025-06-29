@@ -1,8 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { motion } from 'framer-motion'
-import { Zap } from 'lucide-react'
+import { Bot } from 'lucide-react'
 import VoiceStreaming from '@/components/VoiceStreaming'
 import TranscriptDisplay from '@/components/TranscriptDisplay'
 import AgentResponseDisplay from '@/components/AgentResponseDisplay'
@@ -38,45 +37,22 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 relative overflow-hidden">
-      {/* Animated background */}
-      <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))]" />
-      
-      {/* Main container */}
-      <div className="relative z-10 container mx-auto px-4 py-8 min-h-screen flex flex-col">
+    <div className="min-h-screen bg-slate-950 text-white">
+      <div className="container mx-auto px-4 py-6 min-h-screen flex flex-col">
         {/* Header */}
-        <motion.header 
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-8"
-        >
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <motion.div
-              animate={{ rotate: isListening ? 360 : 0 }}
-              transition={{ duration: 2, repeat: isListening ? Infinity : 0, ease: "linear" }}
-              className="p-3 bg-purple-600/20 rounded-full backdrop-blur-sm border border-purple-500/30"
-            >
-              <Zap className="w-8 h-8 text-purple-400" />
-            </motion.div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-              STFU Assistant
-            </h1>
+        <header className="text-center mb-6">
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <Bot className="w-5 h-5 text-slate-400" />
+            <h1 className="text-xl font-medium text-white">STFU Assistant</h1>
           </div>
-          <p className="text-slate-300 text-lg">
-            Real-time voice streaming with AI analysis
-          </p>
+          <p className="text-sm text-slate-400">Real-time voice streaming with AI analysis</p>
           <StatusIndicator status={connectionStatus} isListening={isListening} />
-        </motion.header>
+        </header>
 
-        {/* Main content grid */}
-        <div className="flex-1 grid lg:grid-cols-2 gap-8 max-w-7xl mx-auto w-full">
-          {/* Left column - Voice streaming controls */}
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.2 }}
-            className="space-y-6"
-          >
+        {/* Main content */}
+        <div className="flex-1 grid lg:grid-cols-2 gap-6 max-w-6xl mx-auto w-full">
+          {/* Left column */}
+          <div className="space-y-4">
             <VoiceStreaming
               onConnectionChange={handleConnectionChange}
               onListeningChange={handleListeningChange}
@@ -91,30 +67,21 @@ export default function Home() {
               isListening={isListening}
               isMuted={isMuted}
             />
-          </motion.div>
+          </div>
 
-          {/* Right column - Agent responses */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.3 }}
-          >
+          {/* Right column */}
+          <div>
             <AgentResponseDisplay
               response={agentResponse}
               isConnected={isConnected}
             />
-          </motion.div>
+          </div>
         </div>
 
         {/* Footer */}
-        <motion.footer
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.5 }}
-          className="text-center text-slate-400 text-sm mt-8"
-        >
-          <p>Powered by ElevenLabs Conversational AI • Real-time voice streaming</p>
-        </motion.footer>
+        <footer className="text-center text-xs text-slate-500 mt-6">
+          <p>Powered by ElevenLabs Conversational AI</p>
+        </footer>
       </div>
     </div>
   )

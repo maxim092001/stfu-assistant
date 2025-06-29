@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Bot } from 'lucide-react'
 import VoiceStreaming from '@/components/VoiceStreaming'
 import TranscriptDisplay from '@/components/TranscriptDisplay'
@@ -14,12 +14,6 @@ export default function Home() {
   const [userTranscript, setUserTranscript] = useState('')
   const [agentResponse, setAgentResponse] = useState('')
   const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected')
-  const [isClient, setIsClient] = useState(false)
-
-  // Ensure this only runs on the client side
-  useEffect(() => {
-    setIsClient(true)
-  }, [])
 
   const handleConnectionChange = (connected: boolean) => {
     setIsConnected(connected)
@@ -42,53 +36,8 @@ export default function Home() {
     setAgentResponse(response)
   }
 
-  // Don't render until we're on the client side
-  if (!isClient) {
-    return (
-      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
-        <div className="text-center">
-          <Bot className="w-8 h-8 mx-auto mb-4 text-slate-400 animate-pulse" />
-          <p className="text-slate-400">Loading STFU Assistant...</p>
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <div className="min-h-screen bg-slate-950 text-white relative">
-      {/* Sponsor Badges */}
-      <div className="fixed top-4 right-4 z-50 flex flex-col items-end gap-2">
-        {/* Bolt.new Badge - Required for hackathon */}
-        <a 
-          href="https://bolt.new/" 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="hover:scale-105 transition-all duration-200 hover:drop-shadow-lg"
-          aria-label="Built with Bolt.new"
-        >
-          <img 
-            src="/white_circle_360x360.png" 
-            alt="Built with Bolt.new" 
-            className="w-12 h-12 md:w-16 md:h-16"
-          />
-        </a>
-
-        {/* ElevenLabs Logo */}
-        <a 
-          href="https://elevenlabs.io/" 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="hover:scale-105 transition-all duration-200 hover:drop-shadow-lg"
-          aria-label="Powered by ElevenLabs"
-        >
-          <img 
-            src="/elevenlabs-logo-white.svg" 
-            alt="Powered by ElevenLabs" 
-            className="h-6 md:h-8 w-auto"
-          />
-        </a>
-      </div>
-
+    <div className="min-h-screen bg-slate-950 text-white">
       <div className="container mx-auto px-4 py-6 min-h-screen flex flex-col">
         {/* Header */}
         <header className="text-center mb-6">

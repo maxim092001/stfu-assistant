@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
-import { Mic, MicOff, Settings, AlertCircle, Loader2 } from 'lucide-react'
+import { Mic, MicOff, Settings, AlertCircle, Loader2, Phone, PhoneOff } from 'lucide-react'
 import { useElevenLabsWebSocket } from '../hooks/useElevenLabsWebSocket'
 import type { ConnectionStatus } from '../types/elevenlabs'
 
 interface VoiceStreamingProps {
   onConnectionChange: (connected: boolean) => void
   onListeningChange: (listening: boolean) => void
+  onMutedChange: (muted: boolean) => void
   onUserTranscript: (transcript: string) => void
   onAgentResponse: (response: string) => void
   onStatusChange: (status: ConnectionStatus) => void
@@ -17,17 +18,19 @@ interface VoiceStreamingProps {
 export default function VoiceStreaming({
   onConnectionChange,
   onListeningChange,
+  onMutedChange,
   onUserTranscript,
   onAgentResponse,
   onStatusChange
 }: VoiceStreamingProps) {
   const [isListening, setIsListening] = useState(false)
+  const [isMuted, setIsMuted] = useState(false)
+  const [isCallActive, setIsCallActive] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [status, setStatus] = useState<ConnectionStatus>('disconnected')
 
   // Get environment variables
   const agentId = process.env.NEXT_PUBLIC_ELEVENLABS_AGENT_ID
-  const apiKey = process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY
 
   // ElevenLabs WebSocket connection with official voice-stream integration
   const {
@@ -52,27 +55,45 @@ export default function VoiceStreaming({
     onConnectionChange: (connected) => {
       console.log('🔗 WebSocket connection changed:', connected)
       onConnectionChange(connected)
+      if (!connected) {
+        // Reset call state when connection is lost
+        setIsCallActive(false)
+        setIsListening(false)
+        setIsMuted(false)
+      }
     },
     agentId: agentId || '',
-    apiKey
+    isListening
   })
 
-  // Update listening state
+  // Update listening state - simplified logic
   useEffect(() => {
-    const actuallyListening = isListening && isConnected
-    console.log('👂 Listening state update:', { isListening, isConnected, actuallyListening })
+    const actuallyListening = isListening && isConnected && isCallActive
+    console.log('👂 Listening state update:', { 
+      isListening, 
+      isConnected, 
+      isCallActive, 
+      actuallyListening,
+      isMuted 
+    })
+    console.log('📡 Passing to hook - isListening:', isListening)
     onListeningChange(actuallyListening)
-  }, [isListening, isConnected, onListeningChange])
+  }, [isListening, isConnected, isCallActive, onListeningChange])
+
+  // Update muted state callback
+  useEffect(() => {
+    onMutedChange(isMuted)
+  }, [isMuted, onMutedChange])
 
   // Validate environment variables
   useEffect(() => {
     if (!agentId) {
       setError('Missing NEXT_PUBLIC_ELEVENLABS_AGENT_ID environment variable')
-              }
+    }
   }, [agentId])
 
-  // Start conversation using official voice-stream
-  const startConversation = useCallback(async () => {
+  // Start call - establishes connection and starts listening
+  const startCall = useCallback(async () => {
     if (!agentId) {
       setError('Agent ID not configured. Please set NEXT_PUBLIC_ELEVENLABS_AGENT_ID.')
       return
@@ -80,76 +101,122 @@ export default function VoiceStreaming({
 
     try {
       setError(null)
-      console.log('🚀 Starting conversation with voice-stream...')
+      console.log('🚀 Starting call...')
       
       // Request microphone permission first
       try {
         await navigator.mediaDevices.getUserMedia({ audio: true })
         console.log('🎙️ Microphone permission granted')
-      } catch (permissionError) {
-        throw new Error('Microphone access denied. Please allow microphone access and try again.')
-  }
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Microphone access denied'
+        throw new Error(`Microphone access denied. ${errorMessage}. Please allow microphone access and try again.`)
+      }
 
       // Start conversation (voice-stream will start automatically)
       await startWebSocketConversation()
       
+      // Set call as active and start listening
+      setIsCallActive(true)
       setIsListening(true)
-      console.log('✅ Conversation started successfully with voice-stream')
+      setIsMuted(false)
+      console.log('✅ Call started successfully')
 
     } catch (err) {
-      console.error('❌ Failed to start conversation:', err)
-      const errorMessage = err instanceof Error ? err.message : 'Failed to start conversation'
+      console.error('❌ Failed to start call:', err)
+      const errorMessage = err instanceof Error ? err.message : 'Failed to start call'
       setError(errorMessage)
+      setIsCallActive(false)
       setIsListening(false)
     }
   }, [agentId, startWebSocketConversation])
 
-  // Stop conversation
-  const stopConversation = useCallback(() => {
-    console.log('🛑 Stopping conversation...')
+  // End call - disconnects everything and cleans up
+  const endCall = useCallback(() => {
+    console.log('🛑 Ending call...')
+    setIsCallActive(false)
     setIsListening(false)
+    setIsMuted(false)
     stopWebSocketConversation()
-    console.log('✅ Conversation stopped')
+    console.log('✅ Call ended')
   }, [stopWebSocketConversation])
 
-  // Toggle listening state
-  const toggleListening = useCallback(async () => {
-    console.log('🔄 Toggle listening clicked. Current state:', { isListening, isConnected })
+  // Toggle mute - controls both muted state and listening state
+  const toggleMute = useCallback(() => {
+    console.log('🔇 Toggle mute clicked. BEFORE:', { 
+      isMuted, 
+      isCallActive, 
+      isListening,
+      isConnected 
+    })
     
-    if (isListening) {
-      stopConversation()
+    if (!isCallActive) {
+      console.log('⚠️ Cannot mute - no active call')
+      return
+    }
+    
+    const newMutedState = !isMuted
+    const newListeningState = !newMutedState // If muted, stop listening; if unmuted, start listening
+    
+    console.log('🔄 Setting new states:', {
+      oldMuted: isMuted,
+      newMuted: newMutedState,
+      oldListening: isListening,
+      newListening: newListeningState
+    })
+    
+    setIsMuted(newMutedState)
+    setIsListening(newListeningState)
+    
+    if (newMutedState) {
+      console.log('🔇🔇🔇 MAXON MUTED - SHOULD STOP SENDING AUDIO 🔇🔇🔇')
     } else {
-      await startConversation()
-      }
-  }, [isListening, startConversation, stopConversation])
+      console.log('🎙️🎙️🎙️ MAXON UNMUTED - SHOULD START SENDING AUDIO 🎙️🎙️🎙️')
+    }
+    
+    console.log('✅ State update completed:', {
+      action: newMutedState ? 'MUTED' : 'UNMUTED',
+      listening: newListeningState
+    })
+  }, [isMuted, isCallActive, isListening])
 
   // Get status display text
   const getStatusText = () => {
     if (error) return 'Error - Check console for details'
     
-    switch (status) {
-      case 'connecting':
-        return 'Connecting to ElevenLabs...'
-      case 'connected':
-        if (isListening) {
-          return conversationId ? `Active conversation (${conversationId.slice(0, 8)})` : 'Listening with voice-stream...'
-        }
-        return 'Connected - Click to start conversation'
-      case 'error':
-        return 'Connection error - Click to retry'
-      case 'disconnected':
-      default:
-        return 'Click to start conversation'
-        }
+    if (!isCallActive) {
+      switch (status) {
+        case 'connecting':
+          return 'Connecting to ElevenLabs...'
+        case 'connected':
+          return 'Connected - Click to start call'
+        case 'error':
+          return 'Connection error - Click to retry'
+        case 'disconnected':
+        default:
+          return 'Click to start call'
       }
+    } else {
+      // Call is active
+      if (!isListening) {
+        return 'Call active - Microphone muted'
+      } else if (isListening) {
+        return conversationId ? `Active call (${conversationId.slice(0, 8)})` : 'Microphone listening...'
+      } else {
+        return 'Call active - Microphone inactive'
+      }
+    }
+  }
 
   // Get button color based on state
   const getButtonColor = () => {
     if (error || status === 'error') {
       return 'bg-red-500/20 border-red-500 hover:bg-red-500/30'
     }
-    if (isListening) {
-      return 'bg-red-500/20 border-red-500 shadow-lg shadow-red-500/25'
+    if (isCallActive) {
+      if (!isListening) {
+        return 'bg-yellow-500/20 border-yellow-500 hover:bg-yellow-500/30'
+      }
+      return 'bg-green-500/20 border-green-500 hover:bg-green-500/30'
     }
     if (status === 'connecting') {
       return 'bg-yellow-500/20 border-yellow-500'
@@ -160,7 +227,10 @@ export default function VoiceStreaming({
   // Get icon color based on state
   const getIconColor = () => {
     if (error || status === 'error') return 'text-red-400'
-    if (isListening) return 'text-red-400'
+    if (isCallActive) {
+      if (!isListening) return 'text-yellow-400'
+      return 'text-green-400'
+    }
     if (status === 'connecting') return 'text-yellow-400'
     return 'text-purple-400'
   }
@@ -216,45 +286,118 @@ export default function VoiceStreaming({
           <div className="text-blue-300 text-xs space-y-1">
             <p>🔧 Debug Info (using official voice-stream):</p>
             <p>WebSocket: {isConnected ? '✅ Connected' : '❌ Disconnected'}</p>
-            <p>Voice Stream: {isListening ? '✅ Active' : '❌ Inactive'}</p>
+            <p>Call Active: {isCallActive ? '✅ Yes' : '❌ No'}</p>
+            <p>Microphone: {isCallActive && isListening ? '✅ Active' : isCallActive && !isListening ? '🔇 Muted' : '❌ Inactive'}</p>
+            <p>Listening: {isListening ? '✅ Yes' : '❌ No'}</p>
             <p>Status: {status}</p>
             {conversationId && <p>Conversation: {conversationId}</p>}
           </div>
         </motion.div>
       )}
 
-      {/* Main control */}
+      {/* Call Controls */}
       <div className="text-center">
-        <motion.button
-          onClick={toggleListening}
-          disabled={!agentId || status === 'connecting'}
-          whileHover={{ scale: !agentId ? 1 : 1.05 }}
-          whileTap={{ scale: !agentId ? 1 : 0.95 }}
-          className={`
-            relative w-24 h-24 rounded-full border-4 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed
-            ${getButtonColor()}
-          `}
-        >
-          {/* Icon */}
-          <div className="flex items-center justify-center h-full">
-            {status === 'connecting' ? (
-              <Loader2 className={`w-8 h-8 animate-spin ${getIconColor()}`} />
-            ) : isListening ? (
-              <MicOff className={`w-8 h-8 ${getIconColor()}`} />
-            ) : (
-              <Mic className={`w-8 h-8 ${getIconColor()}`} />
-            )}
-          </div>
-        </motion.button>
+        {!isCallActive ? (
+          // Start Call Button
+          <div>
+            <motion.button
+              onClick={startCall}
+              disabled={!agentId || status === 'connecting'}
+              whileHover={{ scale: !agentId ? 1 : 1.05 }}
+              whileTap={{ scale: !agentId ? 1 : 0.95 }}
+              className={`
+                relative w-24 h-24 rounded-full border-4 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed
+                ${getButtonColor()}
+              `}
+            >
+              {/* Icon */}
+              <div className="flex items-center justify-center h-full">
+                {status === 'connecting' ? (
+                  <Loader2 className={`w-8 h-8 animate-spin ${getIconColor()}`} />
+                ) : (
+                  <Phone className={`w-8 h-8 ${getIconColor()}`} />
+                )}
+              </div>
+            </motion.button>
 
-        <div className="mt-4">
-          <p className="text-lg font-medium text-white">
-            {isListening ? 'Speaking with AI...' : 'Start Voice Conversation'}
-          </p>
-          <p className="text-sm text-slate-400 mt-1">
-            {getStatusText()}
-          </p>
-        </div>
+            <div className="mt-4">
+              <p className="text-lg font-medium text-white">
+                Start Call
+              </p>
+              <p className="text-sm text-slate-400 mt-1">
+                {getStatusText()}
+              </p>
+            </div>
+          </div>
+        ) : (
+          // Call Active - Show Mute/Unmute and End Call buttons
+          <div className="space-y-4">
+            {/* Mute/Unmute Button */}
+            <div>
+              <motion.button
+                onClick={toggleMute}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className={`
+                  relative w-20 h-20 rounded-full border-4 transition-all duration-300
+                  ${!isListening 
+                    ? 'bg-yellow-500/20 border-yellow-500 hover:bg-yellow-500/30' 
+                    : 'bg-green-500/20 border-green-500 hover:bg-green-500/30'
+                  }
+                `}
+              >
+                {/* Icon */}
+                <div className="flex items-center justify-center h-full">
+                  {!isListening ? (
+                    <MicOff className="w-6 h-6 text-yellow-400" />
+                  ) : (
+                    <Mic className="w-6 h-6 text-green-400" />
+                  )}
+                </div>
+              </motion.button>
+
+              <div className="mt-2">
+                <p className="text-sm font-medium text-white">
+                  {!isListening ? 'Unmute Mic' : 'Mute Mic'}
+                </p>
+                <p className="text-xs text-slate-400">
+                  {!isListening ? 'Turn microphone on' : 'Turn microphone off'}
+                </p>
+              </div>
+            </div>
+
+            {/* End Call Button */}
+            <div>
+              <motion.button
+                onClick={endCall}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="relative w-20 h-20 rounded-full border-4 transition-all duration-300 bg-red-500/20 border-red-500 hover:bg-red-500/30"
+              >
+                {/* Icon */}
+                <div className="flex items-center justify-center h-full">
+                  <PhoneOff className="w-6 h-6 text-red-400" />
+                </div>
+              </motion.button>
+
+              <div className="mt-2">
+                <p className="text-sm font-medium text-white">
+                  End Call
+                </p>
+                <p className="text-xs text-slate-400">
+                  Disconnect and cleanup
+                </p>
+              </div>
+            </div>
+
+            {/* Call Status */}
+            <div className="mt-4">
+              <p className="text-sm text-slate-300">
+                {getStatusText()}
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Connection status indicator */}
         <div className="mt-4 flex items-center justify-center gap-2">
@@ -265,8 +408,13 @@ export default function VoiceStreaming({
             'bg-slate-500'
           }`} />
           <span className="text-xs text-slate-400 capitalize">{status}</span>
-          {isListening && <span className="text-xs text-green-400">• voice-stream active</span>}
-            </div>
+          {isCallActive && isListening && (
+            <span className="text-xs text-green-400">• microphone active</span>
+          )}
+          {isCallActive && !isListening && (
+            <span className="text-xs text-yellow-400">• microphone muted</span>
+          )}
+        </div>
       </div>
 
       {/* Technology info */}

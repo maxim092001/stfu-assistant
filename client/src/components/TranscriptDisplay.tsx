@@ -7,6 +7,7 @@ import { MessageCircle, Copy, Download, Trash2 } from 'lucide-react'
 interface TranscriptDisplayProps {
   transcript: string
   isListening: boolean
+  isMuted?: boolean
 }
 
 interface TranscriptEntry {
@@ -15,7 +16,7 @@ interface TranscriptEntry {
   timestamp: Date
 }
 
-export default function TranscriptDisplay({ transcript, isListening }: TranscriptDisplayProps) {
+export default function TranscriptDisplay({ transcript, isListening, isMuted = false }: TranscriptDisplayProps) {
   const [transcriptHistory, setTranscriptHistory] = useState<TranscriptEntry[]>([])
   const [isScrolledToBottom, setIsScrolledToBottom] = useState(true)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -102,12 +103,18 @@ export default function TranscriptDisplay({ transcript, isListening }: Transcrip
         <div className="flex items-center gap-2">
           <MessageCircle className="w-5 h-5 text-blue-400" />
           <h3 className="text-lg font-semibold text-white">Your Voice</h3>
-          {isListening && (
+          {isListening && !isMuted && (
             <motion.div
               animate={{ scale: [1, 1.2, 1] }}
               transition={{ duration: 1, repeat: Infinity }}
               className="w-2 h-2 bg-red-500 rounded-full"
             />
+          )}
+          {isMuted && (
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 bg-yellow-500 rounded-full" />
+              <span className="text-xs text-yellow-400 font-medium">MUTED</span>
+            </div>
           )}
         </div>
         
